@@ -1,0 +1,24 @@
+/*
+ * servo_app - Nucleo-F401RE
+ *
+ * TIM10_CH1 on PB8 -> steering servo signal (50 Hz, 500-2500 us)
+ *
+ * TIM10 is a 16-bit timer. At 84 MHz it cannot count to 20 ms, so the
+ * prescaler divides by 84 (value 83) for a 1 MHz tick: 20 ms = 20000 ticks.
+ */
+
+/* I2C1 claims PB8/PB9 by default; this app does not use I2C1. */
+&i2c1 {
+    status = "disabled";
+};
+
+&timers10 {
+    status = "okay";
+    st,prescaler = <83>;
+
+    pwm10: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim10_ch1_pb8>;
+        pinctrl-names = "default";
+    };
+};

@@ -1,0 +1,50 @@
+/* SPI1 claims PA5 by default so have to disable this
+&spi1 {
+    status = "disabled";
+};
+
+/* The board's LED PWM (pwm2) runs TIM2 in PWM mode on PA5.
+Had to disable this to allow other timer mode to operate*/
+&pwm2 {
+    status = "disabled";
+};
+
+/ {
+    pwmleds {
+        status = "disabled";
+    };
+};
+
+&timers3 {
+    status = "okay";
+
+    qdec: qdec {
+        compatible = "st,stm32-qdec";
+        status = "okay";
+        pinctrl-0 = <&tim3_ch1_pb4 &tim3_ch2_pb5>;
+        pinctrl-names = "default";
+        st,counts-per-revolution = <660>;   /* measured, per wheel revolution */
+    };
+};
+
+&timers2 {
+    status = "okay";
+
+    qdec2: qdec2 {
+        compatible = "st,stm32-qdec";
+        status = "okay";
+        pinctrl-0 = <&tim2_ch1_pa5 &tim2_ch2_pa1>;
+        pinctrl-names = "default";
+        st,counts-per-revolution = <660>;
+    };
+};
+
+&timers1 {
+    status = "okay";
+
+    pwm1: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim1_ch3_pa10>;
+        pinctrl-names = "default";
+    };
+};
