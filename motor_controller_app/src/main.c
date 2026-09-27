@@ -66,7 +66,7 @@ static const struct device *gpioc_dev = DEVICE_DT_GET(DT_NODELABEL(gpioc));
 #define INTEG_LIMIT      0.8f
 #define REVERSE_OK_RPM   3.0f    /* must be nearly stopped before reversing */
 
-#define TEST_RPM         40.0f   /* bench test setpoint */
+#define TEST_RPM         60.0f   /* bench test setpoint */
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                            */

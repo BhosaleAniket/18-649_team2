@@ -1,0 +1,48 @@
+/*
+ * steering_blinker_app - Nucleo-F401RE
+ *
+ * Servo:    TIM10_CH1 on PB8, 50 Hz, 1 MHz tick (prescaler 83)
+ * Blinkers: FL PC7, FR PA9, RL PC6, RR PC8 (plain GPIO)
+ */
+
+/* I2C1 claims PB8/PB9 by default; not used here. */
+&i2c1 {
+    status = "disabled";
+};
+
+&timers10 {
+    status = "okay";
+    st,prescaler = <83>;
+
+    pwm10: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim10_ch1_pb8>;
+        pinctrl-names = "default";
+    };
+};
+
+/ {
+    blinkers {
+        compatible = "gpio-leds";
+
+        blinker_fl: blinker_fl {
+            gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
+            label = "Front left blinker";
+        };
+
+        blinker_fr: blinker_fr {
+            gpios = <&gpioa 9 GPIO_ACTIVE_HIGH>;
+            label = "Front right blinker";
+        };
+
+        blinker_rl: blinker_rl {
+            gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;
+            label = "Rear left blinker";
+        };
+
+        blinker_rr: blinker_rr {
+            gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
+            label = "Rear right blinker";
+        };
+    };
+};

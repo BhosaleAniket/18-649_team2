@@ -1,0 +1,89 @@
+/*
+ * car_app - Nucleo-F401RE, full system
+ *
+ * Link:     USART1  PB6 TX / PB7 RX  (to Pi)
+ * Encoders: TIM3 QDEC PB4/PB5,  TIM2 QDEC PA5/PA1
+ * Motor:    TIM1_CH3 PA10 -> ENA+ENB (PWM),  PC0 -> IN1+IN3,  PA11 -> IN2+IN4
+ * Servo:    TIM10_CH1 PB8, 50 Hz
+ * Blinkers: FL PC7, FR PA9, RL PC6, RR PC8
+ * Test pts: CMD_RX PB10, PWM_SET PA12
+ */
+
+/ {
+    chosen {
+        zephyr,uart-comms = &usart1;
+    };
+
+    /* All plain GPIO outputs. gpio-leds is used as a generic
+     * "named GPIO output" binding; no LED driver is enabled. */
+    gpio_outputs {
+        compatible = "gpio-leds";
+
+        blinker_fl: blinker_fl { gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;  label = "FL"; };
+        blinker_fr: blinker_fr { gpios = <&gpioa 9 GPIO_ACTIVE_HIGH>;  label = "FR"; };
+        blinker_rl: blinker_rl { gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;  label = "RL"; };
+        blinker_rr: blinker_rr { gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;  label = "RR"; };
+
+        motor_in1:  motor_in1  { gpios = <&gpioc 0 GPIO_ACTIVE_HIGH>;  label = "IN1+IN3 (DIR_A)"; };
+        motor_in2:  motor_in2  { gpios = <&gpioa 11 GPIO_ACTIVE_HIGH>; label = "IN2+IN4"; };
+
+        tp_cmd_rx:  tp_cmd_rx  { gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>; label = "CMD_RX"; };
+        tp_pwm_set: tp_pwm_set { gpios = <&gpioa 12 GPIO_ACTIVE_HIGH>; label = "PWM_SET"; };
+    };
+
+    /* Board LED PWM runs TIM2 on PA5; TIM2 is needed for encoder 2. */
+    pwmleds {
+        status = "disabled";
+    };
+};
+
+/* Board defaults that claim pins this app needs */
+&spi1  { status = "disabled"; };   /* PA5 */
+&i2c1  { status = "disabled"; };   /* PB8 */
+&pwm2  { status = "disabled"; };   /* TIM2 */
+
+&usart1 {
+    status = "okay";
+    current-speed = <115200>;
+};
+
+&timers3 {
+    status = "okay";
+    qdec: qdec {
+        compatible = "st,stm32-qdec";
+        status = "okay";
+        pinctrl-0 = <&tim3_ch1_pb4 &tim3_ch2_pb5>;
+        pinctrl-names = "default";
+        st,counts-per-revolution = <660>;
+    };
+};
+
+&timers2 {
+    status = "okay";
+    qdec2: qdec2 {
+        compatible = "st,stm32-qdec";
+        status = "okay";
+        pinctrl-0 = <&tim2_ch1_pa5 &tim2_ch2_pa1>;
+        pinctrl-names = "default";
+        st,counts-per-revolution = <660>;
+    };
+};
+
+&timers1 {
+    status = "okay";
+    pwm1: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim1_ch3_pa10>;
+        pinctrl-names = "default";
+    };
+};
+
+&timers10 {
+    status = "okay";
+    st,prescaler = <83>;          /* 84 MHz / 84 = 1 MHz tick, 20 ms = 20000 */
+    pwm10: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim10_ch1_pb8>;
+        pinctrl-names = "default";
+    };
+};

@@ -1,0 +1,77 @@
+/*
+ * current_sensor_app - Nucleo-F401RE
+ *
+ * Pins match PINMAP.md so this app can be merged with the others:
+ *   PA0  ADC1_IN0  <- left motor current sensor
+ *   PA4  ADC1_IN4  <- right motor current sensor
+ *   PB0  ADC1_IN8  <- servo current sensor
+ *   PA10 TIM1_CH3  -> L298N ENA + ENB (to spin / stall the motors)
+ *   PB8  TIM10_CH1 -> steering servo
+ */
+
+#include <zephyr/dt-bindings/adc/adc.h>
+
+/ {
+    zephyr,user {
+        io-channels = <&adc1 0>, <&adc1 4>, <&adc1 8>;
+        io-channel-names = "i_left", "i_right", "i_servo";
+    };
+};
+
+/* I2C1 claims PB8/PB9 by default; PB8 is the servo. */
+&i2c1 {
+    status = "disabled";
+};
+
+&adc1 {
+    #address-cells = <1>;
+    #size-cells = <0>;
+    pinctrl-0 = <&adc1_in0_pa0 &adc1_in4_pa4 &adc1_in8_pb0>;
+    pinctrl-names = "default";
+    status = "okay";
+
+    channel@0 {
+        reg = <0>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@4 {
+        reg = <4>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@8 {
+        reg = <8>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>;
+        zephyr,resolution = <12>;
+    };
+};
+
+&timers1 {
+    status = "okay";
+
+    pwm1: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim1_ch3_pa10>;
+        pinctrl-names = "default";
+    };
+};
+
+&timers10 {
+    status = "okay";
+    st,prescaler = <83>;
+
+    pwm10: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim10_ch1_pb8>;
+        pinctrl-names = "default";
+    };
+};

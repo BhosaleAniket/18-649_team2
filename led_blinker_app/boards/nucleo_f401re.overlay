@@ -1,0 +1,41 @@
+/*
+ * blinker_app - Nucleo-F401RE
+ *
+ * Four blinker LEDs, each wired: GPIO -> series resistor -> LED -> GND.
+ *
+ *   FL  PC7  (Arduino D9)
+ *   FR  PA9  (Arduino D8)
+ *   RL  PC6  (Morpho CN10)
+ *   RR  PC8  (Morpho CN10)
+ *
+ * None of these are claimed by the board's default peripherals, and they
+ * stay clear of the pins used by the motor, servo, and link apps and of
+ * the ADC pins reserved for the current sensors (PA0, PA4, PB0).
+ * Plain GPIO outputs need no pinctrl entries.
+ */
+
+/ {
+    blinkers {
+        compatible = "gpio-leds";
+
+        blinker_fl: blinker_fl {
+            gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
+            label = "Front left blinker";
+        };
+
+        blinker_fr: blinker_fr {
+            gpios = <&gpioa 9 GPIO_ACTIVE_HIGH>;
+            label = "Front right blinker";
+        };
+
+        blinker_rl: blinker_rl {
+            gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;
+            label = "Rear left blinker";
+        };
+
+        blinker_rr: blinker_rr {
+            gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
+            label = "Rear right blinker";
+        };
+    };
+};
