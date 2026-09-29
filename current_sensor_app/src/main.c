@@ -91,13 +91,13 @@ struct sensor_cal {
     float divider;      /* sensor V / ADC pin V (1.0 = wired directly)   */
 };
 
-/* PLACEHOLDERS: e.g. ACS712-05B = 185 mV/A, -20A = 100 mV/A, -30A = 66 mV/A.
- * A 5 V sensor needs a divider so the ADC pin never sees more than 3.3 V;
- * set divider to (R1 + R2) / R2 in that case. */
+/* ACS712ELC-05B: 185 mV/A, powered from 5 V, zero-current output ~2.5 V.
+ * Each OUT goes through a 47k/47k divider (with 100 nF to GND) to the ADC
+ * pin so it never sees more than 3.3 V: divider = (R1 + R2) / R2 = 2.0. */
 static const struct sensor_cal cal[] = {
-    { "L", 185.0f, 1.0f },
-    { "R", 185.0f, 1.0f },
-    { "S", 185.0f, 1.0f },
+    { "L", 185.0f, 2.0f },
+    { "R", 185.0f, 2.0f },
+    { "S", 185.0f, 2.0f },
 };
 
 /* ------------------------------------------------------------------ */
