@@ -2,8 +2,9 @@
 
 ## Summary
 - The repo already has an RTOS integration: `car_demo_app` runs on Zephyr with priority-based threads. Part 4 is mostly finishing and verifying it, not starting over.
-- The one big missing piece is the **current sensors**. All three ACS712-05B modules are wired and reading. Left and right respond to stalls. Right lost a connection, and the servo sensor isn't verified.
-- The dev environment is now set up on Avi's PC, and flashing works with `west flash`.
+- The **current sensors are now wired and validated** on the bench with `current_sensor_app`: all three ACS712-05B modules read about 0 at rest, respond to motor and servo load, and are quiet enough to use (window scatter about +/-15-30 mA).
+- Still to do: merge ADC sampling into `car_demo_app` and fill in the current fields in the status frame.
+- The dev environment is set up on Avi's PC, and flashing works with `west flash`.
 
 ## 1. What's in the repo (`zephyr_app` branch)
 - Bring-up apps: `motor_controller_app`, `servo_app`, `led_blinker_app`, `blinker_steering_app`, `command_parser_app`, `current_sensor_app`.
@@ -29,7 +30,7 @@
 6. The task table doesn't yet distinguish thread, work item, timer callback and ISR the way the Part 4 questions ask.
 
 ## 2. Dev environment
-Avi's machine now has: Zephyr v4.4.2, Zephyr SDK 1.0.1 (ARM toolchain), a Python 3.12 virtual environment with `west`, and the xPack OpenOCD. Everything is in `C:\Users\vivek\zephyrproject`, outside the repo.
+Avi's machine has: Zephyr v4.4.2, Zephyr SDK 1.0.1 (ARM toolchain), a Python 3.12 virtual environment with `west`, and the xPack OpenOCD. Everything is in `C:\Users\vivek\zephyrproject`, outside the repo.
 - **Python:** Zephyr v4.4.2 needs Python 3.12 or newer. Python 3.10 fails at configure time.
 - **SDK host tools:** they aren't available for Windows yet, so OpenOCD came from winget instead.
 - **ST-LINK driver:** the debug interface needed a WinUSB driver. We installed it with Zadig, on the "ST-Link Debug" interface only.
@@ -51,41 +52,48 @@ Serial console (COM3, 115200): `python -m serial.tools.miniterm COM3 115200`.
 |---|---|---|
 | Left motor | PA0 (A0) | one left-motor wire from L298N OUT1/OUT2 |
 | Right motor | PA4 (A2) | one right-motor wire from OUT3/OUT4 |
-| Servo | PB0 (A3) | the servo's +5 V supply lead |
+| Servo | PB0 (A3) | the servo's +5 V supply lead (buck -> sensor -> servo) |
 
 - Each OUT goes through a **47k / 47k divider** (ratio 1:2) with a **100 nF** cap from the divider node to GND. That's because the ACS712 outputs 0 to 5 V and the STM32 pins are 3.3 V.
 - One ADC step is about 8.7 mA. The code uses `divider = 2.0f`.
-- VCC comes from the buck converter at 5 V, and the servo runs from the same buck rail. The Nucleo stays on USB power, and all grounds are common.
+- **Supply (final arrangement):** the three modules' VCC comes from the **Nucleo's 5V pin** (a quiet supply; they draw about 30 mA total), with decoupling capacitors at each module. The **servo** runs from the buck converter through sensor 3's current path. All grounds are common. This separation cut the noise a lot (see section 4). Do not tie the Nucleo 5V pin to the buck rail.
+- IP+ / IP- on all three modules were swapped so readings are positive with load.
 - Servo signal is on **PB8** (Arduino D15, TIM10 at 50 Hz).
 - Encoders are powered from the Nucleo's 3.3 V.
 
 ## 4. Measurements
-- **Idle baseline:**
-  - With the 12 V supply off, the raw noise is sd ~ 60-70 mA per sample, and average readings sit near 0 mA.
-  - With 12 V on and the motors idle, the noise is sd ~ 250-900 mA per sample (spikes to +/-10 A peak-to-peak), but a 250 ms window average is still within about +/-50 mA of zero.
-- **Stall response** (50% duty, both wheels held), first cycle:
-  - Left changed by about -312 mA and right by about -220 mA compared with REST.
-  - Both went negative, so their IP+ and IP- wires are effectively reversed. That's harmless because thresholds use magnitude, but swapping the wires makes it positive.
-  - FREE (unloaded) changed by less than 100 mA, which is within noise.
-- **Servo sensor:** no measurable response in FREE (servo sweeping) or STALL (servo held).
+All from `current_sensor_app`, at 80% test duty (DD-15 limit), windows of 250 ms.
 
-## 5. Problems found and lessons
-- **Zero is captured once at boot.** If the 5 V rail isn't up when the Nucleo boots, the zero is wrong and every reading is offset by ~13-14 A (this happened three times). **Power the buck and 12 V first, then reset the Nucleo, or press `z` at REST.** The boot line `zero (sensor mV)` should read about 2500 for all three.
-- **Right sensor dropped out** partway through a run: it jumped to -13,000 mA and later stayed at -14,000 mA, so its output collapsed to nearly 0 V. It flickered before settling, which looks like a loose connection. Not yet re-seated or verified.
-- **Servo sensor (S)** showed a 170 mV zero once, and now shows no response to servo current. Still unresolved. The topology is buck -> IP+ -> IP- -> 5 V rail -> servo and all module VCCs, so the sensor sees the rail's total current, and servo motion can also add noise on everyone's supply.
+| Channel | Rest | Free-run (wheels off ground; servo sweeping) | Stalled |
+|---|---|---|---|
+| Left motor | about 0 mA | about +130 mA | about 1.0 A |
+| Right motor | about 0 mA | about +50 mA | about 0.45-0.5 A |
+| Servo | about +12 mA | about +90 mA | no extra beyond moving (about +90 mA) |
+
+- **Noise:**
+  - Before changes (12 V on, sensors on the shared rail): sd about 300-700 mA per sample, window averages scattering +/-200-700 mA.
+  - After powering the modules from the Nucleo 5V and adding decoupling: sd about 60-250 mA per sample, window scatter about +/-15-30 mA.
+- **Servo sensor in series:** confirmed by the pull-wire test (pulling a wire from its IP terminals stops the servo).
+- **Servo sensor baseline:** its output dropped by about 190 mV (about 1 A equivalent) between two runs and stayed there. That is an offset shift, not a stall. The boot zero hides it. If a channel reads a steady large value at rest, press `z` at REST, or check VCC and OUT with a meter.
+
+## 5. Implications for the thresholds
+- **DD-17 (open circuit, below 50 mA at 20% PWM or more):** right-motor free-run current at 80% is only about 50 mA, which sits right at the threshold, so it would false-trip. Lower it (about 20 mA), or back it with the encoders (commanded motion but no counts). Left and servo are well above it. Low duty (20%) still needs testing.
+- **DD-18 (overload, above 2.0 A for 20 ms):** real stalls at 80% reached only about 1.0 A (left) and 0.5 A (right), so 2.0 A never trips. Revisit using the measured data.
+- Use window averages (about 100-200 ms) for any threshold decision.
+
+## 6. Problems found and lessons
+- **Zero is captured once at boot.** If the 5 V rail isn't up when the Nucleo boots, the zero is wrong and every reading is offset by about 13-14 A (this happened several times). Power the rails first, then reset the Nucleo, or press `z` at REST. The boot line `zero (sensor mV)` should read about 2500 for all three.
+- **Intermittent contact on the right module** caused `OVERLOAD` glitches (output dropping to near 0 V) until its wires were re-seated.
+- **Hand-held stalls are unreliable.** Wedge or clamp the wheels and steering for repeatable stall numbers.
+- **ADC-pin swap test is ambiguous:** swapping the divider wires at the Nucleo moves the sensor between pins, but each sensor stays with its own motor, so it cannot separate a sensor fault from a motor effect. A meter on OUT, or the pull-wire test, is more decisive.
 - **Nucleo failed to enumerate** with everything connected (red LD1 blinking). It worked after stripping all wires and reconnecting in groups. The cause wasn't identified.
-- **Noise:** 12 V being on adds much more noise than the sensor itself. A windowed average (about 100-200 ms) is needed for the 50 mA open-circuit threshold (DD-17). The 2 A overload threshold (DD-18) is unaffected.
 
-## 6. Code changes
-- `current_sensor_app/src/main.c`: `cal[]` now uses `divider = 2.0f` (was placeholder 1.0). This change is in the working tree and **not committed**.
-- Nothing else in the repo was modified.
+## 7. Code changes
+- `current_sensor_app/src/main.c`: `cal[]` uses `divider = 2.0f` (47k/47k divider), and `FREE_DUTY` and `STALL_DUTY` were raised from 0.5 to 0.8.
+- No other repo code has been modified yet.
 
-## 7. Open items and next steps
-1. Re-seat the right sensor's wires and check its OUT reads about 2.5 V.
-2. Find out why the servo sensor doesn't respond (test that servo current really flows through sensor 3, and re-zero it).
-3. Rerun FREE and STALL with both wheels and the steering held. Optionally raise the test duty from 50% to 80% (within DD-15) for cleaner numbers.
-4. Record three numbers per sensor (rest, free, stalled) for the fault thresholds.
-5. Add extra decoupling (10 uF plus 100 nF at each module's VCC) and consider taking sensor VCC straight from the buck output to cut noise.
-6. Merge ADC sampling into `car_demo_app` and fill in the current fields in the status frame.
-7. Fix `FAIL_SAFE_MS` and the double-press window, add the missing test points, and update the task table for the writeup.
-8. Deliverables still to do: block diagram, schematic (including power rails and ground), updated values table, task table, and the one-page CAN integration writeup.
+## 8. Open items and next steps
+1. Merge ADC sampling into `car_demo_app` and fill in the current fields in the status frame. Average over a window for each status frame.
+2. Decide the thresholds (DD-17, DD-18) from the measured data, and test open-circuit detection at 20% duty.
+3. Fix `FAIL_SAFE_MS` and the double-press window, add the missing test points, and update the task table for the writeup.
+4. Deliverables still to do: block diagram, schematic (including power rails and ground), updated values table, task table, and the one-page CAN integration writeup.

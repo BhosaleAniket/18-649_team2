@@ -110,8 +110,8 @@ static const struct sensor_cal cal[] = {
 #define SETTLE_MS          300    /* skip inrush when averaging a step */
 #define STALL_MAX_MS       1500   /* lab: never more than a second or two */
 
-#define FREE_DUTY          0.5f   /* open loop, wheels off the ground */
-#define STALL_DUTY         0.5f   /* keep modest: L298N ~2 A/ch; DD-15 max 80% */
+#define FREE_DUTY          0.8f   /* open loop, wheels off the ground; DD-15 max 80% */
+#define STALL_DUTY         0.8f   /* DD-15 max 80%; L298N ~2 A/ch, stall stays under 1.5 s */
 
 /* Fault thresholds from the requirements (DD-17, DD-18). Nothing acts on
  * them here; the app only reports when a reading would have tripped one,
