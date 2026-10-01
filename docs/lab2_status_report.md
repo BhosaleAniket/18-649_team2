@@ -3,7 +3,8 @@
 ## Summary
 - The repo already has an RTOS integration: `car_demo_app` runs on Zephyr with priority-based threads. Part 4 is mostly finishing and verifying it, not starting over.
 - The **current sensors are now wired and validated** on the bench with `current_sensor_app`: all three ACS712-05B modules read about 0 at rest, respond to motor and servo load, and are quiet enough to use (window scatter about +/-15-30 mA).
-- Still to do: merge ADC sampling into `car_demo_app` and fill in the current fields in the status frame.
+- ADC sampling is now merged into `car_demo_app`: a low-priority thread (priority 6) averages the three currents and the status frame reports them. Verified on the bench with the motors braked; not yet checked with the Pi sending commands.
+- The servo travel was pulled in to 1000-2000 us (45-135 deg) after the steering servo buzzed at its stops, and `current_sensor_app` has a new servo range sweep (`s` key) that finds the stops from the servo current.
 - The dev environment is set up on Avi's PC, and flashing works with `west flash`.
 
 ## 1. What's in the repo (`zephyr_app` branch)
@@ -22,7 +23,7 @@
 - Shared state uses a spinlock (command struct) and `atomic_t` (published values).
 
 **Gaps against the spec:**
-1. The current sensors are **not** in `car_demo_app`. `link.c` sends `i_left = i_right = i_servo = 0; /* TODO */` in the status frame.
+1. ~~The current sensors are not in `car_demo_app`.~~ Done: `current.c` samples them and `link.c` reports them in the status frame (it used to send zeros).
 2. Only two test points exist (CMD_RX on PB10 and PWM_SET on PA12). The others need routing to the test board.
 3. `FAIL_SAFE_MS` is 60 ms. The handout says 3 missed commands (150 ms), with a 100 ms checkoff.
 4. The self-test double-press window is 800 ms, and the spec says 500 ms (R3.8).
@@ -89,11 +90,13 @@ All from `current_sensor_app`, at 80% test duty (DD-15 limit), windows of 250 ms
 - **Nucleo failed to enumerate** with everything connected (red LD1 blinking). It worked after stripping all wires and reconnecting in groups. The cause wasn't identified.
 
 ## 7. Code changes
-- `current_sensor_app/src/main.c`: `cal[]` uses `divider = 2.0f` (47k/47k divider), and `FREE_DUTY` and `STALL_DUTY` were raised from 0.5 to 0.8.
-- No other repo code has been modified yet.
+- `current_sensor_app/src/main.c`: `cal[]` uses `divider = 2.0f` (47k/47k divider), `FREE_DUTY` and `STALL_DUTY` were raised from 0.5 to 0.8, and the `s` key runs a servo range sweep: it steps the pulse out from center on each side, watches the servo current, and reports the stops (right stop found at about 2070 us; left stop not reached within 800 us).
+- `car_demo_app`: new `current.c` / `current.h` (ADC1 on PA0, PA4, PB0; 1 ms sampling, boot zero with a range check, magnitude averaged with about a 100 ms time constant), the ADC added to the overlay and `prj.conf`, currents reported in the status frame and on the console line (`I=left/right/servo mA`), and `PRIO_CURRENT` 6 added to `config.h`.
+- `car_demo_app/src/control.c`: servo range changed from 30-150 deg to 45-135 deg (1000-2000 us, DD-05) because it buzzed at both stops.
+- `docs/Lab1_Team2_updated_with_Lab2_changes.docx`: the Lab 1 document with tracked changes bringing it in line with the firmware (see `docs/lab2_requirements_check.md`).
 
 ## 8. Open items and next steps
-1. Merge ADC sampling into `car_demo_app` and fill in the current fields in the status frame. Average over a window for each status frame.
+1. Test the integrated `car_demo_app` with the Pi link running (commands in, status frames with currents out) and confirm the currents under real motor load.
 2. Decide the thresholds (DD-17, DD-18) from the measured data, and test open-circuit detection at 20% duty.
 3. Fix `FAIL_SAFE_MS` and the double-press window, add the missing test points, and update the task table for the writeup.
 4. Deliverables still to do: block diagram, schematic (including power rails and ground), updated values table, task table, and the one-page CAN integration writeup.
