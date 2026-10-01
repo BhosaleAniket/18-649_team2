@@ -71,14 +71,14 @@ static const struct gpio_dt_spec tp_pwm_set = GPIO_DT_SPEC_GET(DT_NODELABEL(tp_p
 #define INTEG_LIMIT  0.8f
 #define DT_S         (CONTROL_PERIOD_MS / 1000.0f)
 
-/* Servo, in servo-shaft degrees.
- * ESTIMATE, not calibrated: observed +/-18 deg servo -> ~5 deg wheel,
- * so ~3.6 servo deg per wheel deg. Wheel stops are ~20 deg; targeting
- * ~17 deg wheel for margin -> +/-60 deg servo around center.
- * If the servo buzzes at either end, move that end 5 deg toward center. */
-#define SERVO_LEFT_DEG     30.0f
+/* Servo, in servo-shaft degrees (pulse us = 500 + deg * 2000 / 180).
+ * +/-60 deg (about 830-2170 us) buzzed at both ends, so the range is pulled in
+ * to +/-45 deg = 1000-2000 us, the DD-05 servo pulse mapping.
+ * If it still buzzes at an end, move that end 5 deg toward center; if there is
+ * slack at an end, widen it in 5 deg steps. */
+#define SERVO_LEFT_DEG     45.0f
 #define SERVO_CENTER_DEG   90.0f
-#define SERVO_RIGHT_DEG    150.0f
+#define SERVO_RIGHT_DEG    135.0f
 #define SERVO_LO_DEG (SERVO_LEFT_DEG < SERVO_RIGHT_DEG ? SERVO_LEFT_DEG : SERVO_RIGHT_DEG)
 #define SERVO_HI_DEG (SERVO_LEFT_DEG < SERVO_RIGHT_DEG ? SERVO_RIGHT_DEG : SERVO_LEFT_DEG)
 

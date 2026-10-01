@@ -26,6 +26,9 @@
  * Serial console (ST-LINK COM port, 115200) keys:
  *   f   cycle the display filter (shows its time constant)
  *   z   re-zero the sensors (only with everything at rest)
+ *   s   servo range sweep (REST only): steps the servo out from center on each
+ *       side until its current rises (it has hit the stop), then prints safe
+ *       left/right limits. Keep hands off the steering.
  *
  * Fault thresholds (requirements DD-17 / DD-18, report only, no action):
  *   open circuit  < 50 mA for 200 ms while PWM >= 20%
@@ -311,6 +314,101 @@ static void announce_step(enum step_kind kind)
 /* Main                                                               */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Servo range finder (console key 's', REST step only)               */
+/* ------------------------------------------------------------------ */
+/* From center, step the servo pulse outward one side at a time and measure
+ * the servo current at each step. Mid-travel the current is small; once the
+ * linkage hits its stop the servo stalls and the current climbs. The first
+ * step whose current stays RANGE_TRIP_MA above the center baseline for
+ * RANGE_CONFIRM steps marks the stop; the reported limit backs off from it by
+ * RANGE_BACKOFF_STEPS. Time spent pushing against the stop is about
+ * RANGE_CONFIRM * (RANGE_SETTLE_MS + RANGE_MEASURE_MS), well under a second. */
+
+#define RANGE_STEP_US        10
+#define RANGE_SETTLE_MS      120
+#define RANGE_MEASURE_MS     80       /* samples at 1 kHz, averaged */
+#define RANGE_TRIP_MA        120.0f   /* rise over the center baseline = at the stop */
+#define RANGE_CONFIRM        2        /* consecutive steps above the trip level */
+#define RANGE_BACKOFF_STEPS  3        /* extra steps of margin from the first trip */
+#define RANGE_LIMIT_US       700      /* never go farther than center +/- this */
+
+static float servo_avg_mv(int ms)
+{
+    float sum = 0.0f;
+
+    for (int n = 0; n < ms; n++) {
+        int16_t raw = 0;
+        read_raw(&adc_chans[2], &raw);
+        sum += raw_to_sensor_mv(2, raw);
+        k_usleep(SAMPLE_PERIOD_US);
+    }
+    return sum / ms;
+}
+
+/* dir: -1 = left (shorter pulse), +1 = right (longer pulse).
+ * Returns the safe limit pulse in us, or the outer limit if no stop was found. */
+static int32_t find_servo_limit(int dir, float base_mv, bool *found)
+{
+    int hits = 0;
+    int32_t first_hit_us = 0;
+
+    *found = false;
+    for (int32_t off = RANGE_STEP_US; off <= RANGE_LIMIT_US; off += RANGE_STEP_US) {
+        int32_t us = SERVO_CENTER_US + dir * off;
+
+        servo_write_us(us);
+        k_msleep(RANGE_SETTLE_MS);
+        float ma = absf(mv_to_ma(2, servo_avg_mv(RANGE_MEASURE_MS), base_mv));
+        printk("  %s %d us: %d mA\n", dir < 0 ? "left " : "right", (int)us, (int)ma);
+
+        if (ma > RANGE_TRIP_MA) {
+            if (hits++ == 0) {
+                first_hit_us = us;
+            }
+            if (hits >= RANGE_CONFIRM) {
+                *found = true;
+                return first_hit_us - dir * (1 + RANGE_BACKOFF_STEPS) * RANGE_STEP_US;
+            }
+        } else {
+            hits = 0;
+        }
+    }
+    return SERVO_CENTER_US + dir * RANGE_LIMIT_US;
+}
+
+static void print_limit(const char *name, int32_t us, bool found)
+{
+    int d10 = (int)((us - 500) * 0.09f * 10.0f + 0.5f);     /* servo deg x10 */
+
+    printk("%s limit: %d us (%d.%d deg)%s\n", name, (int)us, d10 / 10, d10 % 10,
+           found ? "" : "  [no stop found, outer limit]");
+}
+
+static void servo_range_sweep(void)
+{
+    bool found_l, found_r;
+
+    printk("=== servo range sweep: keep hands off the steering ===\n");
+    motor_coast();
+    servo_write_us(SERVO_CENTER_US);
+    k_msleep(800);
+    float base_mv = servo_avg_mv(300);
+
+    int32_t left = find_servo_limit(-1, base_mv, &found_l);
+    servo_write_us(SERVO_CENTER_US);
+    k_msleep(800);
+    int32_t right = find_servo_limit(+1, base_mv, &found_r);
+    servo_write_us(SERVO_CENTER_US);
+
+    printk("=== servo range result (trip %d mA, backoff %d us) ===\n",
+           (int)RANGE_TRIP_MA, RANGE_BACKOFF_STEPS * RANGE_STEP_US);
+    print_limit("left ", left, found_l);
+    print_limit("right", right, found_r);
+    printk("use: SERVO_LEFT_DEG = %d, SERVO_RIGHT_DEG = %d (control.c)\n",
+           (int)((left - 500) * 0.09f + 0.5f), (int)((right - 500) * 0.09f + 0.5f));
+}
+
 /* Consecutive-sample qualifier: reports once when a condition has held
  * for its full duration, re-arms when the condition clears. */
 struct qualifier {
@@ -442,6 +540,18 @@ int main(void)
                     }
                 } else {
                     printk("re-zero only in REST\n");
+                }
+            } else if (c == 's') {
+                if (step == STEP_REST) {
+                    servo_range_sweep();
+                    for (int i = 0; i < NUM_CH; i++) {
+                        filt[i] = 0.0f;
+                        window_reset(&win[i]);
+                        step_reset(&st[i]);
+                    }
+                    step_start_ms = k_uptime_get();
+                } else {
+                    printk("range sweep only in REST\n");
                 }
             }
         }

@@ -7,11 +7,20 @@
  * Servo:    TIM10_CH1 PB8, 50 Hz
  * Blinkers: FL PC7, FR PA9, RL PC6, RR PC8
  * Test pts: CMD_RX PB10, PWM_SET PA12
+ * Current:  PA0 ADC1_IN0 left motor, PA4 ADC1_IN4 right motor, PB0 ADC1_IN8 servo
+ *           (ACS712 outputs through 47k/47k dividers)
  */
+
+#include <zephyr/dt-bindings/adc/adc.h>
 
 / {
     chosen {
         zephyr,uart-comms = &usart1;
+    };
+
+    zephyr,user {
+        io-channels = <&adc1 0>, <&adc1 4>, <&adc1 8>;
+        io-channel-names = "i_left", "i_right", "i_servo";
     };
 
     /* All plain GPIO outputs. gpio-leds is used as a generic
@@ -45,6 +54,38 @@
 &usart1 {
     status = "okay";
     current-speed = <115200>;
+};
+
+&adc1 {
+    #address-cells = <1>;
+    #size-cells = <0>;
+    pinctrl-0 = <&adc1_in0_pa0 &adc1_in4_pa4 &adc1_in8_pb0>;
+    pinctrl-names = "default";
+    status = "okay";
+
+    channel@0 {
+        reg = <0>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@4 {
+        reg = <4>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@8 {
+        reg = <8>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_MAX>;
+        zephyr,resolution = <12>;
+    };
 };
 
 &timers3 {

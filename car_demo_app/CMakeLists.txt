@@ -7,4 +7,5 @@ target_sources(app PRIVATE
     src/link.c
     src/control.c
     src/blinkers.c
+    src/current.c
 )

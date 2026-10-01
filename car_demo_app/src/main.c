@@ -20,6 +20,7 @@
 #include "link_proto.h"
 #include "control.h"
 #include "blinkers.h"
+#include "current.h"
 
 static void print_faults(uint8_t f)
 {
@@ -37,7 +38,8 @@ int main(void)
 {
     /* Actuators first, so the board is braked and hazards are on
      * before any command can arrive. */
-    if (control_init() != 0 || blinkers_init() != 0 || link_init() != 0) {
+    if (control_init() != 0 || blinkers_init() != 0 || current_init() != 0 ||
+        link_init() != 0) {
         printk("ERROR: init failed\n");
         return 0;
     }
@@ -79,14 +81,18 @@ int main(void)
 
             struct link_cmd cmd;
             struct control_telemetry t;
+            struct current_readings cur;
             link_get_command(&cmd);
             control_get_telemetry(&t);
+            current_get(&cur);
 
             printk("steer=%d thr=%u brk=%u flags=0x%02x | "
-                   "target=%d rpm=%d duty=%d%%%s | turn=%s | bad=%u\n",
+                   "target=%d rpm=%d duty=%d%%%s | I=%u/%u/%u mA%s | turn=%s | bad=%u\n",
                    cmd.steer, cmd.thr, cmd.brk, cmd.flags,
                    t.target_x10 / 10, t.rpm_x10 / 10, t.duty_pct,
                    t.braking ? " BRAKE" : "",
+                   cur.left_ma, cur.right_ma, cur.servo_ma,
+                   current_is_valid() ? "" : " (no zero)",
                    blinkers_turn_name(), link_bad_frames());
         }
 

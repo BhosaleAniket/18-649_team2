@@ -18,6 +18,7 @@
 #include "link.h"
 #include "link_proto.h"
 #include "control.h"
+#include "current.h"
 #include "config.h"
 
 static const struct device *uart_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_uart_comms));
@@ -159,7 +160,9 @@ static void status_thread(void *a, void *b, void *c)
         k_timer_status_sync(&status_timer);
 
         uint8_t f[STATUS_LEN];
-        uint16_t i_left = 0, i_right = 0, i_servo = 0;   /* TODO: current sensors */
+        struct current_readings cur;
+        current_get(&cur);                               /* averaged mA, 0 until zeroed */
+        uint16_t i_left = cur.left_ma, i_right = cur.right_ma, i_servo = cur.servo_ma;
 
         f[0]  = LINK_SYNC0;
         f[1]  = LINK_SYNC1;

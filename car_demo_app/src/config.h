@@ -12,6 +12,8 @@
  *  status TX        thread      20 ms, timer-synced       3     20 ms +/- 10%
  *  blinker logic    thread      20 ms                     5     100 ms
  *  blink output     timer ISR   250 ms                    IRQ   pattern edge
+ *  current sensors  thread      1 ms (3 ADC channels)     6     100 ms average,
+ *                                                                reported every 20 ms
  *  monitor          thread      500 ms                    7     best effort
  */
 #ifndef CONFIG_H
@@ -21,12 +23,14 @@
 #define PRIO_CONTROL   1
 #define PRIO_STATUS    3
 #define PRIO_BLINKER   5
+#define PRIO_CURRENT   6
 #define PRIO_MONITOR   7
 
 /* ---- Stack sizes ---- */
 #define STACK_CONTROL  2048
 #define STACK_STATUS   1024
 #define STACK_BLINKER  1024
+#define STACK_CURRENT  1536
 #define STACK_MONITOR  2048
 
 /* ---- Periods ---- */
