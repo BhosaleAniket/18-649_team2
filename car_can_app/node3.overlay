@@ -1,0 +1,31 @@
+/*
+ * N3 rear / drivetrain zone
+ *   PWM_OUT  PA8  (D7)      TIM1_CH1 motor PWM, 20 kHz (scoped, not wired to the H-bridge)
+ *   DIR_A    PC0  (A5)      1 = drive forward (IN1=1, IN2=0), 0 = brake
+ *   PWM_SET  PA12 (morpho)  toggles each time DRIVE / PID writes a new duty
+ *   RL       PC6  (morpho)  rear-left blinker LED + test point
+ *   RR       PC8  (morpho)  rear-right blinker LED + test point
+ *   RELAY_TX PB13 (morpho CN10-30) N3 relays in checkoff cases 3-4;
+ *                           optional test point (not on the handout's N3 board)
+ */
+
+/ {
+    zone_outputs {
+        compatible = "gpio-leds";
+
+        blink_left:  blink_left  { gpios = <&gpioc 6  GPIO_ACTIVE_HIGH>; label = "RL"; };
+        blink_right: blink_right { gpios = <&gpioc 8  GPIO_ACTIVE_HIGH>; label = "RR"; };
+        tp_dir_a:    tp_dir_a    { gpios = <&gpioc 0  GPIO_ACTIVE_HIGH>; label = "DIR_A"; };
+        tp_pwm_set:  tp_pwm_set  { gpios = <&gpioa 12 GPIO_ACTIVE_HIGH>; label = "PWM_SET"; };
+        tp_relay_tx: tp_relay_tx { gpios = <&gpiob 13 GPIO_ACTIVE_HIGH>; label = "RELAY_TX"; };
+    };
+};
+
+&timers1 {
+    status = "okay";
+    motor_pwm: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim1_ch1_pa8>;
+        pinctrl-names = "default";
+    };
+};
