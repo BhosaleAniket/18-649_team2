@@ -1,0 +1,75 @@
+/*
+ * car_can_app - pins shared by N2 and N3 (Team 2 wiring)
+ *
+ *   CAN modules (XIAO MCP2515 + SN65HVD230), both on SPI1
+ *     SCK PA5 (D13)  MOSI PA7 (D11)  MISO PA6 (D12)   shared
+ *     CAN A: CS PB6 (D10)  INT PA10 (D2)
+ *     CAN B: CS PC7 (D9)   INT PB5  (D4)
+ *     Crystal 16.000 MHz (read off the module), 500 kbit/s
+ *
+ *   Test points / LEDs
+ *     CAN_RX_A PB10 (D6)   CAN_RX_B PB4 (D5)
+ *     CAN_TX_A PA0  (A0)   CAN_TX_B PA1 (A1)
+ *     DEG_A    PA4  (A2)   DEG_B    PB0 (A3)
+ *     ERR      PC1  (A4)
+ *   Test button: B1, PC13 (board user button, sw0)
+ *
+ * Zone-specific pins are in node2.overlay / node3.overlay.
+ */
+
+/ {
+    /* Plain GPIO outputs. gpio-leds is used only as a "named GPIO"
+     * binding; no LED driver is enabled. */
+    testpoints {
+        compatible = "gpio-leds";
+
+        tp_can_rx_a: tp_can_rx_a { gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>; label = "CAN_RX_A"; };
+        tp_can_rx_b: tp_can_rx_b { gpios = <&gpiob 4  GPIO_ACTIVE_HIGH>; label = "CAN_RX_B"; };
+        tp_can_tx_a: tp_can_tx_a { gpios = <&gpioa 0  GPIO_ACTIVE_HIGH>; label = "CAN_TX_A"; };
+        tp_can_tx_b: tp_can_tx_b { gpios = <&gpioa 1  GPIO_ACTIVE_HIGH>; label = "CAN_TX_B"; };
+        led_deg_a:   led_deg_a   { gpios = <&gpioa 4  GPIO_ACTIVE_HIGH>; label = "DEG_A"; };
+        led_deg_b:   led_deg_b   { gpios = <&gpiob 0  GPIO_ACTIVE_HIGH>; label = "DEG_B"; };
+        tp_err:      tp_err      { gpios = <&gpioc 1  GPIO_ACTIVE_HIGH>; label = "ERR"; };
+    };
+
+    /* Board LED PWM uses TIM2 on PA5, which is SPI1 SCK here */
+    pwmleds {
+        status = "disabled";
+    };
+};
+
+/* Board defaults that claim pins used here */
+&usart1 { status = "disabled"; };   /* PB6 = CAN A chip select */
+&i2c1   { status = "disabled"; };   /* PB8 = servo PWM on N2 */
+&pwm2   { status = "disabled"; };   /* TIM2 on PA5 */
+
+/* Independent watchdog (R4.5) */
+&iwdg {
+    status = "okay";
+};
+
+&spi1 {
+    status = "okay";
+    cs-gpios = <&gpiob 6 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>,   /* reg 0: CAN A */
+               <&gpioc 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;   /* reg 1: CAN B */
+
+    can_a: mcp2515@0 {
+        compatible = "microchip,mcp2515";
+        reg = <0>;
+        spi-max-frequency = <8000000>;      /* MCP2515 max 10 MHz; margin for jumpers */
+        int-gpios = <&gpioa 10 GPIO_ACTIVE_LOW>;
+        osc-freq = <16000000>;              /* 16.000 MHz crystal, confirmed */
+        bitrate = <500000>;
+        status = "okay";
+    };
+
+    can_b: mcp2515@1 {
+        compatible = "microchip,mcp2515";
+        reg = <1>;
+        spi-max-frequency = <8000000>;
+        int-gpios = <&gpiob 5 GPIO_ACTIVE_LOW>;
+        osc-freq = <16000000>;
+        bitrate = <500000>;
+        status = "okay";
+    };
+};
