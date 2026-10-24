@@ -1,0 +1,19 @@
+#!/bin/sh
+# setup_can.sh - bring up both CAN interfaces for Lab 3 (run with sudo after every boot)
+#
+# One-time, in /boot/firmware/config.txt, then reboot:
+#   dtparam=spi=on
+#   dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25
+#   dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=24
+# One-time packages:
+#   sudo apt install can-utils python3-can python3-lgpio
+set -e
+for i in can0 can1; do
+    ip link set "$i" down 2>/dev/null || true
+    # restart-ms: automatic bus-off recovery (R4.8 recovery within 100 ms)
+    # txqueuelen 4: few frames can pile up while a jumper is pulled
+    ip link set "$i" type can bitrate 500000 restart-ms 100
+    ip link set "$i" txqueuelen 4
+    ip link set "$i" up
+    ip -details link show "$i" | grep -E "state|bitrate"
+done

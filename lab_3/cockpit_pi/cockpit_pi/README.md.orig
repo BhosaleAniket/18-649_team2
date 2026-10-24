@@ -1,0 +1,46 @@
+# N1 cockpit (Raspberry Pi) - Lab 3, Team 2
+
+## Run
+```
+sudo sh setup_can.sh                 # every boot
+sudo python3 cockpit.py --rt         # SCHED_FIFO 50, pinned to CPU 3
+```
+Start the proxy on the laptop with `--interval-ms 20`.
+
+Console keys (type, then Enter):
+
+| Key | Action |
+|---|---|
+| `b` | next CTRL carries steer = -32768 (out of range, valid CRC) |
+| `c` | next CTRL carries a wrong CRC |
+| `t` | simulate a press of the wheel test button |
+| `s` | print state, counters and UDP_RX to CAN-write latency (p99, max) |
+| `q` | quit (also writes `latency.csv`) |
+
+## Check before the demo
+1. Run `sudo python3 cockpit.py --raw` and move each pedal. Copy the released and
+   pressed raw values into `THR_RAW_*` / `BRK_RAW_*` at the top of `cockpit.py`.
+   The defaults (released +32767, pressed -32767) are a guess based on
+   "pedals read inverted".
+2. Button indices at the top of the file: left blinker = left gear shift (5),
+   right blinker = right gear shift (4), cockpit test = Y (3). Change them if
+   your values table says otherwise.
+
+## Test points (BCM GPIO, header pin)
+
+| Signal | GPIO | Pin |
+|---|---|---|
+| UDP_RX | 17 | 11 |
+| CMD_TX | 27 | 13 |
+| CAN_TX_A | 22 | 15 |
+| CAN_TX_B | 23 | 16 |
+| DEG_A LED | 5 | 29 |
+| DEG_B LED | 6 | 31 |
+
+These avoid SPI0 (GPIO 7-11) and the MCP2515 interrupt pins (GPIO 24, 25).
+
+## Measuring the Pi stage (Part 3.3)
+Scope UDP_RX against CMD_TX for at least a minute, with and without
+`stress-ng --cpu 4 --io 2 --vm 1 --timeout 120s` running. Report the maximum and
+the 99th percentile. `latency.csv` (same interval, software timestamps) is a
+cross-check, not a replacement for the scope numbers.
