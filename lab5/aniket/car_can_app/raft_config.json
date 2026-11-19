@@ -1,0 +1,18 @@
+{
+  "catalog_version": "0.8",
+  "N": 3,
+  "default_leader": "cockpit",
+  "heartbeat_ms": 20,
+  "missed_heartbeats": 3,
+  "election_timeout_jitter_ms": 39,
+  "log_size": 30000,
+  "nodes": { "1": "cockpit", "2": "steering", "3": "drivetrain" },
+  "debug": true,
+  "append_period_ms": 100,
+  "election_seed": 0,
+  "catchup_pace_ms": 2,
+  "report_retry_ms": 50,
+  "boot_listen_ms": 100,
+  "rx_latency_us": 0,
+  "relay_delay_us": 550
+}
