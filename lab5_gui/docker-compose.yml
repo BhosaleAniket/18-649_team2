@@ -1,0 +1,20 @@
+# Lab 5 extra credit: Redis + GUI. Run from this folder: docker compose up -d --build
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    volumes: ["redisdata:/data"]
+    restart: unless-stopped
+    # No "ports:" on purpose: Redis is reachable only from the app container.
+  app:
+    build: ./server
+    image: lab5-gui
+    env_file: .env
+    environment:
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+    ports: ["8443:8443"]
+    volumes: ["./certs:/app/certs:ro"]
+    depends_on: [redis]
+    restart: unless-stopped
+volumes:
+  redisdata: {}

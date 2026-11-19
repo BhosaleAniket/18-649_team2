@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vehicle Monitor</title>
+<style>
+  :root { --bg:#f4f4f2; --card:#fff; --ink:#1d1d1b; --mute:#6b6b66; --line:#ddd; --ok:#2f7d32; --bad:#b3261e; --warn:#8a5a00; --warnbg:#fff4d6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --card:#21211f; --ink:#ececea; --mute:#a3a39d; --line:#3a3a37; --ok:#7bc47f; --bad:#f2827a; --warn:#f0c674; --warnbg:#3a3220; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:18px; margin:0; }
+  header button { font:inherit; background:none; border:1px solid var(--line); color:var(--ink); border-radius:6px; padding:4px 10px; cursor:pointer; }
+  main { padding:16px; display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); max-width:1200px; margin:0 auto; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; }
+  section h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); margin:0 0 10px; }
+  .wide { grid-column: 1 / -1; }
+  #banner { display:none; background:var(--warnbg); color:var(--warn); border:1px solid var(--warn); border-radius:8px; padding:10px 14px; margin:16px auto 0; max-width:1168px; }
+  body.stale main { opacity:.55; }
+  body.stale #banner { display:block; }
+  .nodes { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .node { border:1px solid var(--line); border-radius:6px; padding:10px; text-align:center; }
+  .node .name { font-weight:600; }
+  .pill { display:inline-block; font-size:12px; padding:1px 8px; border-radius:99px; border:1px solid currentColor; margin:4px 2px 0; }
+  .up { color:var(--ok); } .down { color:var(--bad); } .tag { color:var(--mute); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--mute); font-weight:500; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:14px; }
+  .kv div:nth-child(odd) { color:var(--mute); }
+  .big { font-size:40px; font-weight:600; line-height:1; }
+  #logwrap { max-height:420px; overflow:auto; }
+  #log td { font-family: ui-monospace, monospace; font-size:13px; white-space:nowrap; }
+  #log tr.new { animation: flash 1.2s; }
+  @keyframes flash { from { background:var(--warnbg); } to { background:transparent; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Team 2 vehicle monitor</h1>
+  <form method="post" action="/logout"><button>Log out</button></form>
+</header>
+<div id="banner">Stale: no heartbeat from the Pi for <b id="age">-</b>. The Pi is the only uplink, so this view freezes while the cockpit is down and catches up when it returns.</div>
+<main>
+  <section>
+    <h2>1 · Nodes</h2>
+    <div class="nodes" id="nodes"></div>
+  </section>
+  <section>
+    <h2>2 · CAN links</h2>
+    <table><thead><tr><th>Node</th><th>Bus A</th><th>Bus B</th></tr></thead><tbody id="links"></tbody></table>
+  </section>
+  <section>
+    <h2>3 · Leader and time</h2>
+    <div class="kv" id="leader"></div>
+  </section>
+  <section>
+    <h2>4 · Held events</h2>
+    <div class="big" id="held">0</div>
+    <p class="tag" id="heldnote">Entries the leader committed while the Pi was down, replayed on its return.</p>
+  </section>
+  <section class="wide">
+    <h2>5 · Committed log</h2>
+    <div id="logwrap"><table id="log"><thead><tr><th>Index</th><th>Term</th><th>Class</th><th>Entry</th><th>Global time (s)</th><th></th></tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+<script>
+const NAMES = {1:"cockpit", 2:"steering", 3:"drivetrain"};
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const upDown = b => b ? '<span class="pill up">up</span>' : '<span class="pill down">down</span>';
+const fmtUs = us => us == null ? "-" : (us / 1e6).toFixed(6);
+
+function render(st) {
+  document.body.classList.toggle("stale", st.stale);
+  $("age").textContent = st.age_ms == null ? "ever (no data yet)" : (st.age_ms / 1000).toFixed(1) + " s";
+  $("held").textContent = st.held;
+  $("heldnote").textContent = st.held_at_ms
+    ? "Entries the leader committed while the Pi was down, replayed on its return (last at " + new Date(st.held_at_ms).toLocaleTimeString() + ")."
+    : "Entries the leader committed while the Pi was down, replayed on its return.";
+  const hb = st.hb;
+  if (!hb) return;
+  let nodes = "", links = "";
+  for (const n of [1, 2, 3]) {
+    const alive = (hb.alive >> (n - 1)) & 1, lk = hb.link[n - 1];
+    const tags = (hb.leader === n ? '<span class="pill tag">leader</span><span class="pill tag">time master</span>' : "");
+    nodes += `<div class="node"><div class="name">${NAMES[n]}</div>${alive ? '<span class="pill up">alive</span>' : '<span class="pill down">dead</span>'}<br>${tags}</div>`;
+    links += `<tr><td>${NAMES[n]}</td><td>${upDown(lk & 1)}</td><td>${upDown(lk & 2)}</td></tr>`;
+  }
+  $("nodes").innerHTML = nodes;
+  $("links").innerHTML = links;
+  const kv = [
+    ["Leader", hb.leader ? NAMES[hb.leader] : "unknown"],
+    ["Time master", hb.leader ? NAMES[hb.leader] : "unknown"],
+    ["Term", hb.term],
+    ["Failure mode", hb.failure ? "yes (hazards)" : "no"],
+    ["Global time", fmtUs(hb.global_us) + " s"],
+    ["Pi wall clock", new Date(hb.pi_wall_ms).toLocaleTimeString()],
+    ["Pi drift", hb.drift_ppb == null ? "-" : (hb.drift_ppb / 1000).toFixed(1) + " ppm"],
+    ["FL/RL offset", hb.fl_rl_offset_us == null ? "not measured" : hb.fl_rl_offset_us + " µs"],
+    ["Uplink queue", hb.queue_len + " (dropped " + hb.dropped + ")"],
+  ];
+  $("leader").innerHTML = kv.map(([k, v]) => `<div>${k}</div><div>${esc(v)}</div>`).join("");
+}
+
+function addRows(rows, flash) {
+  const body = $("log").tBodies[0];
+  for (const e of rows) {
+    const tr = document.createElement("tr");
+    if (flash) tr.className = "new";
+    tr.innerHTML = `<td>${e.index}</td><td>${e.term}</td><td>${esc(e.cls)}</td><td>${esc(e.type + " " + e.payload)}</td><td>${fmtUs(e.global_us)}</td><td>${e.replayed ? '<span class="pill tag">replayed</span>' : ""}</td>`;
+    body.prepend(tr);
+  }
+  while (body.rows.length > 1000) body.deleteRow(-1);
+}
+
+function connect() {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.kind === "snapshot") { $("log").tBodies[0].innerHTML = ""; addRows(m.rows, false); }
+    else if (m.kind === "rows") addRows(m.rows, true);
+    else if (m.kind === "state") render(m);
+  };
+  ws.onclose = ev => {
+    if (ev.code === 4401) { location.href = "/login"; return; }
+    document.body.classList.add("stale");
+    $("age").textContent = "? (server connection lost, retrying)";
+    setTimeout(connect, 1000);
+  };
+}
+connect();
+</script>
+</body>
+</html>
