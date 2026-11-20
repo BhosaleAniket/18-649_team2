@@ -1,0 +1,27 @@
+/*
+ * N2 front / steering zone
+ *   SRV      PB8  (D15)  TIM10_CH1 servo PWM, 50 Hz (also the SRV test point)
+ *   FL       PC9  (morpho)  front-left blinker LED + test point
+ *   FR       PA9  (D8)      front-right blinker LED + test point
+ *   RELAY_TX PC0  (A5)      toggles when RELAY queues a forwarded frame
+ */
+
+/ {
+    zone_outputs {
+        compatible = "gpio-leds";
+
+        blink_left:  blink_left  { gpios = <&gpioc 9 GPIO_ACTIVE_HIGH>; label = "FL"; };
+        blink_right: blink_right { gpios = <&gpioa 9 GPIO_ACTIVE_HIGH>; label = "FR"; };
+        tp_relay_tx: tp_relay_tx { gpios = <&gpioc 0 GPIO_ACTIVE_HIGH>; label = "RELAY_TX"; };
+    };
+};
+
+&timers10 {
+    status = "okay";
+    st,prescaler = <83>;          /* 84 MHz / 84 = 1 MHz tick, 20 ms = 20000 counts */
+    servo_pwm: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim10_ch1_pb8>;
+        pinctrl-names = "default";
+    };
+};
